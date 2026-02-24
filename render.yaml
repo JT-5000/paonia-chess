@@ -12,11 +12,7 @@ services:
         value: 3001
       - key: JWT_SECRET
         generateValue: true
-      - key: DB_PATH
-        value: /data/paonia.db
+      - key: DATABASE_URL
+        sync: false
       - key: CLIENT_ORIGIN
-        value: https://paonia-chess.onrender.com  # update to your actual Render URL
-    disk:
-      name: paonia-chess-data
-      mountPath: /data
-      sizeGB: 1
+        value: https://paonia-chess.onrender.com
