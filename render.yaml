@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: paonia-chess
+    runtime: node
+    rootDir: .
+    buildCommand: npm run build:all
+    startCommand: node server/dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_PATH
+        value: /data/paonia.db
+      - key: CLIENT_ORIGIN
+        value: https://paonia-chess.onrender.com  # update to your actual Render URL
+    disk:
+      name: paonia-chess-data
+      mountPath: /data
+      sizeGB: 1
