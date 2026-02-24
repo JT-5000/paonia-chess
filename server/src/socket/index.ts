@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import db from '../db';
+import pool from '../db';
 import { applyMove, clearGame, getOrLoadGame } from './gameManager';
 import { Game, JwtPayload, User } from '../types';
 
@@ -25,8 +25,9 @@ export function registerSocketHandlers(io: Server): void {
   io.on('connection', (socket: Socket) => {
     const { userId, username } = (socket as AuthSocket).user;
 
-    socket.on('join-room', ({ roomCode }: { roomCode: string }) => {
-      const game = db.prepare('SELECT * FROM games WHERE room_code = ?').get(roomCode) as Game | undefined;
+    socket.on('join-room', async ({ roomCode }: { roomCode: string }) => {
+      const { rows } = await pool.query('SELECT * FROM games WHERE room_code = $1', [roomCode]);
+      const game = rows[0] as Game | undefined;
       if (!game) {
         socket.emit('error', { message: 'Room not found' });
         return;
@@ -34,14 +35,17 @@ export function registerSocketHandlers(io: Server): void {
 
       // If game is waiting and this user is NOT the creator, they join as black
       if (game.status === 'waiting' && game.white_id !== userId) {
-        db.prepare(
-          'UPDATE games SET black_id = ?, status = ?, updated_at = datetime("now") WHERE room_code = ?'
-        ).run(userId, 'active', roomCode);
+        await pool.query(
+          `UPDATE games SET black_id = $1, status = $2, updated_at = NOW()::text WHERE room_code = $3`,
+          [userId, 'active', roomCode]
+        );
 
         socket.join(roomCode);
 
-        const whiteUser = db.prepare('SELECT username FROM users WHERE id = ?').get(game.white_id) as Pick<User, 'username'> | undefined;
-        const blackUser = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as Pick<User, 'username'> | undefined;
+        const { rows: whiteRows } = await pool.query('SELECT username FROM users WHERE id = $1', [game.white_id]);
+        const { rows: blackRows } = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
+        const whiteUser = whiteRows[0] as Pick<User, 'username'> | undefined;
+        const blackUser = blackRows[0] as Pick<User, 'username'> | undefined;
 
         io.to(roomCode).emit('game-started', {
           fen: game.fen,
@@ -61,14 +65,15 @@ export function registerSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on('make-move', ({ roomCode, move }: { roomCode: string; move: { from: string; to: string; promotion?: string } }) => {
-      const game = db.prepare('SELECT * FROM games WHERE room_code = ?').get(roomCode) as Game | undefined;
+    socket.on('make-move', async ({ roomCode, move }: { roomCode: string; move: { from: string; to: string; promotion?: string } }) => {
+      const { rows } = await pool.query('SELECT * FROM games WHERE room_code = $1', [roomCode]);
+      const game = rows[0] as Game | undefined;
       if (!game || game.status !== 'active') {
         socket.emit('error', { message: 'Game not active' });
         return;
       }
 
-      const chess = getOrLoadGame(roomCode);
+      const chess = await getOrLoadGame(roomCode);
       if (!chess) {
         socket.emit('error', { message: 'Game state not found' });
         return;
@@ -85,7 +90,7 @@ export function registerSocketHandlers(io: Server): void {
       }
 
       try {
-        const result = applyMove(roomCode, move);
+        const result = await applyMove(roomCode, move);
 
         io.to(roomCode).emit('move-made', {
           fen: result.fen,
@@ -106,9 +111,10 @@ export function registerSocketHandlers(io: Server): void {
             gameResult = 'draw';
           }
 
-          db.prepare(
-            'UPDATE games SET status = ?, winner_id = ?, result = ?, updated_at = datetime("now") WHERE room_code = ?'
-          ).run('finished', winnerId, gameResult, roomCode);
+          await pool.query(
+            `UPDATE games SET status = $1, winner_id = $2, result = $3, updated_at = NOW()::text WHERE room_code = $4`,
+            ['finished', winnerId, gameResult, roomCode]
+          );
 
           clearGame(roomCode);
 
@@ -127,17 +133,19 @@ export function registerSocketHandlers(io: Server): void {
       }
     });
 
-    socket.on('resign', ({ roomCode }: { roomCode: string }) => {
-      const game = db.prepare('SELECT * FROM games WHERE room_code = ?').get(roomCode) as Game | undefined;
+    socket.on('resign', async ({ roomCode }: { roomCode: string }) => {
+      const { rows } = await pool.query('SELECT * FROM games WHERE room_code = $1', [roomCode]);
+      const game = rows[0] as Game | undefined;
       if (!game || game.status !== 'active') return;
 
       const isWhite = game.white_id === userId;
       const result: 'white' | 'black' = isWhite ? 'black' : 'white';
       const winnerId = isWhite ? game.black_id : game.white_id;
 
-      db.prepare(
-        'UPDATE games SET status = ?, winner_id = ?, result = ?, updated_at = datetime("now") WHERE room_code = ?'
-      ).run('finished', winnerId, result, roomCode);
+      await pool.query(
+        `UPDATE games SET status = $1, winner_id = $2, result = $3, updated_at = NOW()::text WHERE room_code = $4`,
+        ['finished', winnerId, result, roomCode]
+      );
 
       clearGame(roomCode);
 
@@ -148,13 +156,15 @@ export function registerSocketHandlers(io: Server): void {
       socket.to(roomCode).emit('draw-offered', { by: username });
     });
 
-    socket.on('accept-draw', ({ roomCode }: { roomCode: string }) => {
-      const game = db.prepare('SELECT * FROM games WHERE room_code = ?').get(roomCode) as Game | undefined;
+    socket.on('accept-draw', async ({ roomCode }: { roomCode: string }) => {
+      const { rows } = await pool.query('SELECT * FROM games WHERE room_code = $1', [roomCode]);
+      const game = rows[0] as Game | undefined;
       if (!game || game.status !== 'active') return;
 
-      db.prepare(
-        'UPDATE games SET status = ?, result = ?, updated_at = datetime("now") WHERE room_code = ?'
-      ).run('finished', 'draw', roomCode);
+      await pool.query(
+        `UPDATE games SET status = $1, result = $2, updated_at = NOW()::text WHERE room_code = $3`,
+        ['finished', 'draw', roomCode]
+      );
 
       clearGame(roomCode);
 

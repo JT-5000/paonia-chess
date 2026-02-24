@@ -10,6 +10,7 @@ dotenv.config();
 import authRoutes from './routes/auth';
 import gameRoutes from './routes/games';
 import { registerSocketHandlers } from './socket/index';
+import { initDb } from './db';
 
 const app = express();
 const httpServer = createServer(app);
@@ -41,6 +42,11 @@ if (process.env.NODE_ENV === 'production') {
 registerSocketHandlers(io);
 
 const PORT = Number(process.env.PORT ?? 3001);
-httpServer.listen(PORT, () => {
-  console.log(`Paonia Chess server running on http://localhost:${PORT}`);
+initDb().then(() => {
+  httpServer.listen(PORT, () => {
+    console.log(`Paonia Chess server running on http://localhost:${PORT}`);
+  });
+}).catch((err) => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
 });

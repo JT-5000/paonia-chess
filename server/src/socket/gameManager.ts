@@ -1,14 +1,15 @@
 import { Chess } from 'chess.js';
-import db from '../db';
+import pool from '../db';
 import { Game } from '../types';
 
 // In-memory cache: roomCode -> Chess instance
 const activeGames = new Map<string, Chess>();
 
-export function getOrLoadGame(roomCode: string): Chess | null {
+export async function getOrLoadGame(roomCode: string): Promise<Chess | null> {
   if (activeGames.has(roomCode)) return activeGames.get(roomCode)!;
 
-  const row = db.prepare('SELECT pgn, status FROM games WHERE room_code = ?').get(roomCode) as Pick<Game, 'pgn' | 'status'> | undefined;
+  const { rows } = await pool.query('SELECT pgn, status FROM games WHERE room_code = $1', [roomCode]);
+  const row = rows[0] as Pick<Game, 'pgn' | 'status'> | undefined;
   if (!row || row.status === 'finished') return null;
 
   const chess = new Chess();
@@ -29,19 +30,20 @@ export interface MoveResult {
   isGameOver: boolean;
 }
 
-export function applyMove(
+export async function applyMove(
   roomCode: string,
   move: { from: string; to: string; promotion?: string }
-): MoveResult {
-  const chess = getOrLoadGame(roomCode);
+): Promise<MoveResult> {
+  const chess = await getOrLoadGame(roomCode);
   if (!chess) throw new Error('Game not found or already finished');
 
   const result = chess.move(move);
   if (!result) throw new Error('Illegal move');
 
-  db.prepare(
-    'UPDATE games SET fen = ?, pgn = ?, updated_at = datetime("now") WHERE room_code = ?'
-  ).run(chess.fen(), chess.pgn(), roomCode);
+  await pool.query(
+    `UPDATE games SET fen = $1, pgn = $2, updated_at = NOW()::text WHERE room_code = $3`,
+    [chess.fen(), chess.pgn(), roomCode]
+  );
 
   return {
     fen: chess.fen(),
