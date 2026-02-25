@@ -48,7 +48,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#0f1117',
+    backgroundColor: '#0f1117',
+    backgroundImage: 'url(/paonia-background.png)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
   },
   card: {
     background: '#1a1f2e',

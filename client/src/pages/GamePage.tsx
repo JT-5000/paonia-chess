@@ -178,7 +178,9 @@ export function GamePage() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: 'calc(100vh - 52px)',
-    background: '#0f1117',
+    backgroundImage: 'linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url(/mitchell-close-up.jpg)',
+    backgroundSize: 'cover, 200px',
+    backgroundRepeat: 'no-repeat, repeat',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

@@ -33,7 +33,7 @@ export function Board({ fen, playerColor, roomCode, isMyTurn }: Props) {
   }
 
   return (
-    <div style={{ width: '100%', maxWidth: '560px' }}>
+    <div style={{ width: '100%', maxWidth: '560px', border: '12px solid white', borderRadius: '10px' }}>
       <Chessboard
         position={fen}
         onPieceDrop={onPieceDrop}
